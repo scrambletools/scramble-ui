@@ -426,6 +426,34 @@ pub fn side_sheet_sized<'a, Message: Clone + 'a>(
     content: impl Into<Element<'a, Message>>,
     width: impl Into<Length>,
 ) -> Element<'a, Message> {
+    sheet(title, on_close, None, content.into(), width.into())
+}
+
+/// A docked side sheet with `tabs` under its title, which stay in place
+/// as the content scrolls.
+pub fn side_sheet_tabbed<'a, Message: Clone + 'a>(
+    title: impl text::IntoFragment<'a>,
+    on_close: Message,
+    tabs: impl Into<Element<'a, Message>>,
+    content: impl Into<Element<'a, Message>>,
+    width: impl Into<Length>,
+) -> Element<'a, Message> {
+    sheet(
+        title,
+        on_close,
+        Some(tabs.into()),
+        content.into(),
+        width.into(),
+    )
+}
+
+fn sheet<'a, Message: Clone + 'a>(
+    title: impl text::IntoFragment<'a>,
+    on_close: Message,
+    tabs: Option<Element<'a, Message>>,
+    content: Element<'a, Message>,
+    width: Length,
+) -> Element<'a, Message> {
     let header = row![
         font::styled(title, Type::TitleLarge),
         space::horizontal(),
@@ -436,16 +464,19 @@ pub fn side_sheet_sized<'a, Message: Clone + 'a>(
     ]
     .align_y(Center)
     .padding(super::dir::padding(12.0, 12.0, 8.0, 24.0));
-    let sheet = container(column![
-        header,
-        scroll(container(content).padding(Padding {
-            top: 8.0,
-            right: 24.0,
-            bottom: 24.0,
-            left: 24.0,
-        }))
-        .height(Fill),
-    ])
+    let sheet = container(
+        column![header]
+            .push(tabs.map(|tabs| container(tabs).padding([0, 12])))
+            .push(
+                scroll(container(content).padding(Padding {
+                    top: 8.0,
+                    right: 24.0,
+                    bottom: 24.0,
+                    left: 24.0,
+                }))
+                .height(Fill),
+            ),
+    )
     .width(width)
     .height(Fill)
     .style(style::chrome);

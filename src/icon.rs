@@ -25,6 +25,7 @@ macro_rules! icons {
 }
 
 icons! {
+    AccountTree = 0xe97a, "account_tree";
     Add = 0xe145, "add";
     ArrowBack = 0xe5c4, "arrow_back";
     ArrowDropDown = 0xe5c5, "arrow_drop_down";
@@ -109,6 +110,7 @@ icons! {
     Lock = 0xe899, "lock";
     Loupe = 0xe402, "loupe";
     Mic = 0xe31d, "mic";
+    MonitorHeart = 0xeaa2, "monitor_heart";
     MoreVert = 0xe5d4, "more_vert";
     NoteAdd = 0xe89c, "note_add";
     OneToOne = 0xefcd, "1x_mobiledata";
@@ -146,6 +148,7 @@ icons! {
     Star = 0xf09a, "star";
     StickyNote = 0xf1fc, "sticky_note_2";
     Stop = 0xe047, "stop";
+    Stream = 0xe9e9, "stream";
     SyncProblem = 0xe629, "sync_problem";
     TextFields = 0xe262, "text_fields";
     TextFormat = 0xe165, "text_format";
