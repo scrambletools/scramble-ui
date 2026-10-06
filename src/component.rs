@@ -617,6 +617,23 @@ impl Backdrop {
     }
 }
 
+/// The room a [`text_field`] keeps above its box for its raised label.
+pub const FIELD_LABEL_ROOM: f32 = 8.0;
+
+/// `content` beside a [`text_field`] in a row centred across, such as the
+/// field's button: with the room above it the field keeps for its label,
+/// it centres on the field's box rather than a little above it.
+pub fn beside_field<'a, Message: 'a>(
+    content: impl Into<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    container(content)
+        .padding(Padding {
+            top: FIELD_LABEL_ROOM,
+            ..Padding::ZERO
+        })
+        .into()
+}
+
 /// An outlined text field whose label stands in for the placeholder, and
 /// moves into the outline once the field has the keyboard focus or text.
 pub fn text_field<'a, Message: Clone + 'a>(
@@ -651,12 +668,17 @@ pub fn text_field<'a, Message: Clone + 'a>(
     // left for the raised label.
     let resting =
         container(font::styled(label.clone(), Type::BodyLarge).style(style::on_surface_variant))
-            .padding(super::dir::padding(8.0 + 12.0, 16.0, 0.0, 16.0))
+            .padding(super::dir::padding(
+                FIELD_LABEL_ROOM + 12.0,
+                16.0,
+                0.0,
+                16.0,
+            ))
             .width(Fill)
             .align_x(super::dir::horizontal_start());
     super::field::labelled(
         container(input).padding(Padding {
-            top: 8.0,
+            top: FIELD_LABEL_ROOM,
             ..Padding::ZERO
         }),
         raised(style::on_surface_variant),
