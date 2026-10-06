@@ -480,6 +480,11 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, iced::Renderer>
             );
         }
 
+        // Text kept to the part of the button in view: a software renderer
+        // can draw text from a scrolled area outside it.
+        let Some(clip) = bounds.intersection(viewport) else {
+            return;
+        };
         if let Some(glyph) = self.glyph {
             let side = Height::ExtraSmall.icon();
             renderer.fill_text(
@@ -500,7 +505,7 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, iced::Renderer>
                 },
                 Point::new(bounds.center_x(), bounds.center_y()),
                 content,
-                *viewport,
+                clip,
             );
             return;
         }
@@ -539,7 +544,7 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, iced::Renderer>
             },
             Point::new(label_x, bounds.center_y()),
             content,
-            *viewport,
+            clip,
         );
         renderer.fill_text(
             text::Text {
@@ -555,7 +560,7 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, iced::Renderer>
             },
             Point::new(arrow_x, bounds.center_y()),
             content,
-            *viewport,
+            clip,
         );
     }
 
