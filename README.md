@@ -2,8 +2,8 @@
 
 Material Design 3 Expressive for [iced](https://iced.rs): color schemes
 from a seed, type scale, icons, shapes, spring motion, buttons, toolbars,
-side sheets, popovers, fields and resize handles, with the desktop's accent
-color and light or dark preference (Omarchy, the XDG settings portal,
+side sheets, popovers, drop-downs, fields and resize handles, with the
+desktop's accent color and light or dark preference (Omarchy, the XDG settings portal,
 Windows and macOS). Shared by [prev](https://github.com/scrambletools/prev)
 and [triib](https://github.com/scrambletools/triib).
 

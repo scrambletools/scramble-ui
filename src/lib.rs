@@ -7,6 +7,7 @@ pub mod button;
 pub mod component;
 pub mod desktop;
 pub mod dir;
+pub mod dropdown;
 pub mod enter;
 pub mod field;
 pub mod font;
