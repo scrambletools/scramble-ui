@@ -36,10 +36,10 @@ const ICON_ROOM: f32 = 20.0 + 12.0;
 /// How the button looks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Look {
-    /// Plain until pointed at, as a table's heading or a choice in a bar.
+    /// Plain until pointed at, as a table's heading; the default.
     #[default]
     Quiet,
-    /// Outlined, as a form's field.
+    /// Outlined, for a form that boxes its fields.
     Outlined,
 }
 
@@ -95,6 +95,8 @@ pub struct Dropdown<Message> {
     glyph: Option<Icon>,
     /// The label stands in for a value not picked yet.
     placeholder: bool,
+    /// The label is the value picked, shown as body text, not a label.
+    value: bool,
     entries: Vec<Entry<Message>>,
     look: Look,
     width: Length,
@@ -103,8 +105,7 @@ pub struct Dropdown<Message> {
 }
 
 /// A drop-down that picks one of `options`, the button showing the one
-/// `selected`; `on_pick` makes the message for each. Outlined, as a form's
-/// field, unless given another look.
+/// `selected`; `on_pick` makes the message for each.
 pub fn pick<T, Message>(
     options: impl IntoIterator<Item = T>,
     selected: Option<T>,
@@ -123,10 +124,11 @@ where
     let label = selected.as_ref().map(ToString::to_string);
     Dropdown {
         placeholder: label.is_none(),
+        value: true,
         label: label.unwrap_or_default(),
         glyph: None,
         entries,
-        look: Look::Outlined,
+        look: Look::Quiet,
         width: Length::Shrink,
         height: Height::Small,
         text: None,
@@ -139,6 +141,7 @@ pub fn menu<Message>(label: impl Into<String>, entries: Vec<Entry<Message>>) -> 
         label: label.into(),
         glyph: None,
         placeholder: false,
+        value: false,
         entries,
         look: Look::Quiet,
         width: Length::Shrink,
@@ -182,9 +185,9 @@ impl<Message> Dropdown<Message> {
         self
     }
 
-    /// The type style of the button's label: by default a label's for the
-    /// quiet look and body text for the outlined one, smaller on an extra
-    /// small button.
+    /// The type style of the button's label: by default body text for a
+    /// value picked, smaller on an extra small button, and a label's for a
+    /// menu of actions.
     pub fn text(mut self, style: Type) -> Self {
         self.text = Some(style);
         self
@@ -219,10 +222,10 @@ impl<'a, Message: Clone + 'a> From<Dropdown<Message>> for Element<'a, Message> {
         Element::new(DropdownWidget {
             text: dropdown
                 .text
-                .unwrap_or(match (dropdown.look, dropdown.height) {
-                    (Look::Quiet, _) => Type::LabelLarge,
-                    (Look::Outlined, Height::ExtraSmall) => Type::BodyMedium,
-                    (Look::Outlined, Height::Small | Height::Medium) => Type::BodyLarge,
+                .unwrap_or(match (dropdown.value, dropdown.height) {
+                    (false, _) => Type::LabelLarge,
+                    (true, Height::ExtraSmall) => Type::BodyMedium,
+                    (true, Height::Small | Height::Medium) => Type::BodyLarge,
                 }),
             padding: match dropdown.height {
                 Height::ExtraSmall => 12.0,
@@ -232,6 +235,7 @@ impl<'a, Message: Clone + 'a> From<Dropdown<Message>> for Element<'a, Message> {
             glyph: dropdown.glyph,
             mirrored,
             placeholder: dropdown.placeholder,
+            value: dropdown.value,
             look: dropdown.look,
             width: dropdown.width,
             height: dropdown.height.height(),
@@ -242,6 +246,8 @@ impl<'a, Message: Clone + 'a> From<Dropdown<Message>> for Element<'a, Message> {
 }
 
 struct DropdownWidget<'a, Message> {
+    /// The label is the value picked.
+    value: bool,
     label: String,
     glyph: Option<Icon>,
     /// The label at the end and the arrow at the start, in right to left
@@ -426,8 +432,8 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, iced::Renderer>
         let content = match (self.look, state.open) {
             _ if self.placeholder => scheme.on_surface_variant,
             (Look::Quiet, true) => scheme.on_secondary_container,
-            (Look::Quiet, false) => scheme.on_surface_variant,
-            (Look::Outlined, _) => scheme.on_surface,
+            _ if self.value => scheme.on_surface,
+            _ => scheme.on_surface_variant,
         };
         let border = match self.look {
             Look::Quiet => Border {
