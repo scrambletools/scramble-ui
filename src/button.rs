@@ -259,6 +259,13 @@ impl<'a, Message: Clone + 'a> Button<'a, Message> {
         self
     }
 
+    /// Lays custom content out as an icon's, centred without padding, so
+    /// a narrow button such as a color swatch keeps its content whole.
+    pub fn unpadded(mut self) -> Self {
+        self.icon_only = true;
+        self
+    }
+
     /// Overrides the height the size gives.
     pub fn height(mut self, height: f32) -> Self {
         self.height = Some(height);

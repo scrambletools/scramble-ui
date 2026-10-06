@@ -709,6 +709,44 @@ pub fn search_bar<'a, Message: Clone + 'a>(
         .into()
 }
 
+/// The width of a [`swatch`].
+pub const SWATCH_WIDTH: f32 = 32.0;
+
+/// A round color button, as in a color menu: `color`, ringed when
+/// selected; without a color, a cross for none.
+pub fn swatch<'a, Message: Clone + 'a>(
+    color: Option<iced::Color>,
+    selected: bool,
+    message: Message,
+) -> Element<'a, Message> {
+    let dot = container(Space::new().width(20).height(20)).style(move |theme: &Theme| {
+        let scheme = Scheme::of(theme);
+        iced::widget::container::Style {
+            background: color.map(iced::Background::Color),
+            border: iced::Border {
+                color: if selected {
+                    scheme.primary
+                } else {
+                    scheme.outline_variant
+                },
+                width: if selected { 3.0 } else { 1.0 },
+                radius: shape::FULL.into(),
+            },
+            ..Default::default()
+        }
+    });
+    let content: Element<'a, Message> = match color {
+        Some(_) => dot.into(),
+        None => stack![dot, container(icon::icon(Icon::Close, 16)).center(20)].into(),
+    };
+    button::custom(Kind::Standard, content)
+        .size(button::Size::ExtraSmall)
+        .unpadded()
+        .width(SWATCH_WIDTH)
+        .on_press(message)
+        .into()
+}
+
 /// A navigation style list row: a pill that fills when selected.
 pub fn list_row<'a, Message: Clone + 'a>(
     leading: Option<Icon>,
