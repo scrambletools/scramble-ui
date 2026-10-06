@@ -368,7 +368,9 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, iced::Renderer>
             Size::new(label_width + around, self.height),
         );
         let room = (size.width - around).max(0.0);
-        state.shown = if label_width <= room {
+        // A button sized to its label gets back a hair less room after
+        // the sums; that much never needs an ellipsis.
+        state.shown = if label_width <= room + 0.5 {
             self.label.clone()
         } else {
             fit(&self.label, self.text, room)
@@ -522,6 +524,8 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, iced::Renderer>
             )
         };
         let (size, line_height) = self.text.metrics();
+        // The label is fitted already; a box exactly its width would drop
+        // its last letter, so the gap before the arrow is spare.
         renderer.fill_text(
             text::Text {
                 align_x,
@@ -530,7 +534,7 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, iced::Renderer>
                     self.text.font(false),
                     size,
                     line_height,
-                    room,
+                    room + ARROW_GAP,
                 )
             },
             Point::new(label_x, bounds.center_y()),
