@@ -23,19 +23,23 @@ toml = "1"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 ashpd = { version = "0.13", default-features = false, features = ["async-io", "open_uri", "settings"] }
+# The keyboard layout in use, from the copy in vendor/winit.
+winit = "0.30"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSAccessibility", "NSColor", "NSColorSpace", "NSWorkspace", "objc2-core-foundation"] }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Registry", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Globalization", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }
 
 [dev-dependencies]
 iced_test = "0.14"
 tempfile = "3"
 
-# Right to left text in text inputs; see vendor/PATCHES.md. Apps using this
-# crate add the same section, pointing at these copies.
+# Right to left text in text inputs, and the keyboard layout in use; see
+# vendor/PATCHES.md. Apps using this crate add the same section, pointing
+# at these copies.
 [patch.crates-io]
 iced_graphics = { path = "vendor/iced_graphics" }
 iced_widget = { path = "vendor/iced_widget" }
+winit = { path = "vendor/winit" }

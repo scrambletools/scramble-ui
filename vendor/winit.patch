@@ -1,0 +1,542 @@
+diff -ruN '--exclude=hand_cursors' a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml	2026-10-02 21:19:33.069891934 -0700
++++ b/Cargo.toml	2026-10-02 21:19:33.091409875 -0700
+@@ -509,6 +509,7 @@
+     "NSRunLoop",
+     "NSString",
+     "NSThread",
++    "NSURL",
+     "NSValue",
+ ]
+ 
+diff -ruN '--exclude=hand_cursors' a/src/platform/drag_drop.rs b/src/platform/drag_drop.rs
+--- a/src/platform/drag_drop.rs	1969-12-31 16:00:00.000000000 -0800
++++ b/src/platform/drag_drop.rs	2026-10-02 21:19:33.075018492 -0700
+@@ -0,0 +1,37 @@
++//! prev: drags over a window, for the application to handle itself.
++//!
++//! winit's macOS window takes only file names from a drag. With a hook
++//! set, the window's dragging destination methods call it instead, with
++//! the `NSWindow` and the `NSDraggingInfo` as pointers, so the application
++//! can read any type from the drag's pasteboard with its own bindings. The
++//! hook returns the `NSDragOperation` to show, or for a drop, nonzero when
++//! it took the data.
++
++use std::ffi::c_void;
++use std::sync::RwLock;
++
++/// Which of the dragging destination methods is calling.
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum Phase {
++    Entered,
++    Updated,
++    Exited,
++    Perform,
++}
++
++type Hook = Box<dyn Fn(Phase, *const c_void, *const c_void) -> usize + Send + Sync>;
++
++static HOOK: RwLock<Option<Hook>> = RwLock::new(None);
++
++/// Handles drags over every window with `hook`: its arguments are the
++/// phase, the `NSWindow` and the `NSDraggingInfo` (null for `Exited`
++/// when AppKit passes none). It runs on the main thread.
++pub fn set_hook(hook: impl Fn(Phase, *const c_void, *const c_void) -> usize + Send + Sync + 'static) {
++    *HOOK.write().unwrap_or_else(|e| e.into_inner()) = Some(Box::new(hook));
++}
++
++/// The hook's answer, or `None` when no hook is set.
++pub(crate) fn call(phase: Phase, window: *const c_void, info: *const c_void) -> Option<usize> {
++    let hook = HOOK.read().unwrap_or_else(|e| e.into_inner());
++    hook.as_ref().map(|hook| hook(phase, window, info))
++}
+diff -ruN '--exclude=hand_cursors' a/src/platform/keyboard_layout.rs b/src/platform/keyboard_layout.rs
+--- a/src/platform/keyboard_layout.rs	1969-12-31 16:00:00.000000000 -0800
++++ b/src/platform/keyboard_layout.rs	2026-10-02 21:19:33.073894815 -0700
+@@ -0,0 +1,20 @@
++//! prev: the keyboard layout the user is typing with.
++//!
++//! X11 and Wayland tell clients which of the keymap's layouts is active,
++//! but winit keeps it to itself. This publishes what the active layout
++//! types on the letter keys, from which an application can tell the
++//! layout's script and so its writing direction.
++
++use std::sync::Mutex;
++
++static LETTERS: Mutex<Option<String>> = Mutex::new(None);
++
++/// The letters the active layout types on the three letter rows, in
++/// order, or `None` before the first keyboard event.
++pub fn letters() -> Option<String> {
++    LETTERS.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone()
++}
++
++pub(crate) fn publish(letters: String) {
++    *LETTERS.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(letters);
++}
+diff -ruN '--exclude=hand_cursors' a/src/platform/mod.rs b/src/platform/mod.rs
+--- a/src/platform/mod.rs	2026-10-02 21:19:33.052545599 -0700
++++ b/src/platform/mod.rs	2026-10-02 21:19:33.074064341 -0700
+@@ -11,6 +11,12 @@
+ #[cfg(any(orbital_platform, docsrs))]
+ pub mod orbital;
+ #[cfg(any(x11_platform, wayland_platform, docsrs))]
++pub mod keyboard_layout;
++#[cfg(any(macos_platform, docsrs))]
++pub mod drag_drop;
++#[cfg(any(macos_platform, docsrs))]
++pub mod open_files;
++#[cfg(any(x11_platform, wayland_platform, docsrs))]
+ pub mod startup_notify;
+ #[cfg(any(wayland_platform, docsrs))]
+ pub mod wayland;
+diff -ruN '--exclude=hand_cursors' a/src/platform/open_files.rs b/src/platform/open_files.rs
+--- a/src/platform/open_files.rs	1969-12-31 16:00:00.000000000 -0800
++++ b/src/platform/open_files.rs	2026-10-02 21:19:33.074116549 -0700
+@@ -0,0 +1,35 @@
++//! prev: files macOS asks the application to open.
++//!
++//! Finder, the Dock and `open` hand a Mac application its files through
++//! the application delegate's `application:openURLs:`, not as arguments,
++//! both at launch and while it runs. winit owns the delegate, so it keeps
++//! them here until the application takes them.
++
++use std::path::PathBuf;
++use std::sync::Mutex;
++
++type Handler = Box<dyn Fn(Vec<PathBuf>) + Send>;
++
++static HANDLER: Mutex<Option<Handler>> = Mutex::new(None);
++/// Files that came before a handler was set, such as at launch.
++static PENDING: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
++
++/// Calls `handler` with each batch of files macOS asks to open, first
++/// with any that came before it was set.
++pub fn set_handler(handler: impl Fn(Vec<PathBuf>) + Send + 'static) {
++    let pending = std::mem::take(&mut *PENDING.lock().unwrap_or_else(|e| e.into_inner()));
++    if !pending.is_empty() {
++        handler(pending);
++    }
++    *HANDLER.lock().unwrap_or_else(|e| e.into_inner()) = Some(Box::new(handler));
++}
++
++pub(crate) fn deliver(paths: Vec<PathBuf>) {
++    if paths.is_empty() {
++        return;
++    }
++    match &*HANDLER.lock().unwrap_or_else(|e| e.into_inner()) {
++        Some(handler) => handler(paths),
++        None => PENDING.lock().unwrap_or_else(|e| e.into_inner()).extend(paths),
++    }
++}
+diff -ruN '--exclude=hand_cursors' a/src/platform_impl/linux/common/xkb/state.rs b/src/platform_impl/linux/common/xkb/state.rs
+--- a/src/platform_impl/linux/common/xkb/state.rs	2026-10-02 21:19:33.055634835 -0700
++++ b/src/platform_impl/linux/common/xkb/state.rs	2026-10-02 21:19:33.076889975 -0700
+@@ -7,7 +7,8 @@
+ #[cfg(x11_platform)]
+ use x11_dl::xlib_xcb::xcb_connection_t;
+ use xkbcommon_dl::{
+-    self as xkb, xkb_keycode_t, xkb_keysym_t, xkb_layout_index_t, xkb_state, xkb_state_component,
++    self as xkb, xkb_keycode_t, xkb_keymap, xkb_keysym_t, xkb_layout_index_t, xkb_state,
++    xkb_state_component,
+ };
+ 
+ use crate::platform_impl::common::xkb::keymap::XkbKeymap;
+@@ -19,13 +20,16 @@
+ pub struct XkbState {
+     state: NonNull<xkb_state>,
+     modifiers: ModifiersState,
++    // prev: the keymap the state was made from, which lives as long as the
++    // state, to read what the active layout types.
++    keymap: *mut xkb_keymap,
+ }
+ 
+ impl XkbState {
+     #[cfg(wayland_platform)]
+     pub fn new_wayland(keymap: &XkbKeymap) -> Option<Self> {
+         let state = NonNull::new(unsafe { (XKBH.xkb_state_new)(keymap.as_ptr()) })?;
+-        Some(Self::new_inner(state))
++        Some(Self::new_inner(state, keymap.as_ptr()))
+     }
+ 
+     #[cfg(x11_platform)]
+@@ -34,16 +38,45 @@
+             (XKBXH.xkb_x11_state_new_from_device)(keymap.as_ptr(), xcb, keymap._core_keyboard_id)
+         };
+         let state = NonNull::new(state)?;
+-        Some(Self::new_inner(state))
++        Some(Self::new_inner(state, keymap.as_ptr()))
+     }
+ 
+-    fn new_inner(state: NonNull<xkb_state>) -> Self {
++    fn new_inner(state: NonNull<xkb_state>, keymap: *mut xkb_keymap) -> Self {
+         let modifiers = ModifiersState::default();
+-        let mut this = Self { state, modifiers };
++        let mut this = Self { state, modifiers, keymap };
+         this.reload_modifiers();
++        this.publish_layout_letters();
+         this
+     }
+ 
++    /// prev: publishes the letters the active layout types, for
++    /// `winit::platform::keyboard_layout`.
++    fn publish_layout_letters(&mut self) {
++        let layout = unsafe {
++            (XKBH.xkb_state_serialize_layout)(
++                self.state.as_ptr(),
++                xkb_state_component::XKB_STATE_LAYOUT_EFFECTIVE,
++            )
++        };
++        // The three letter rows of a PC keyboard, as XKB keycodes (evdev
++        // codes plus 8): Q to P, A to L and Z to M.
++        let keys = (24..=33).chain(38..=46).chain(52..=58);
++        let letters: String = keys
++            .filter_map(|key| {
++                let mut syms: *const xkb_keysym_t = std::ptr::null();
++                let count = unsafe {
++                    (XKBH.xkb_keymap_key_get_syms_by_level)(self.keymap, key, layout, 0, &mut syms)
++                };
++                if count < 1 || syms.is_null() {
++                    return None;
++                }
++                let code = unsafe { (XKBH.xkb_keysym_to_utf32)(*syms) };
++                char::from_u32(code).filter(|c| !c.is_control())
++            })
++            .collect();
++        crate::platform::keyboard_layout::publish(letters);
++    }
++
+     pub fn get_one_sym_raw(&mut self, keycode: xkb_keycode_t) -> xkb_keysym_t {
+         unsafe { (XKBH.xkb_state_key_get_one_sym)(self.state.as_ptr(), keycode) }
+     }
+@@ -121,6 +154,10 @@
+             // Effective value of mods have changed, we need to update our state.
+             self.reload_modifiers();
+         }
++
++        if mask.contains(xkb_state_component::XKB_STATE_LAYOUT_EFFECTIVE) {
++            self.publish_layout_letters();
++        }
+     }
+ 
+     /// Reload the modifiers.
+diff -ruN '--exclude=hand_cursors' a/src/platform_impl/macos/app_state.rs b/src/platform_impl/macos/app_state.rs
+--- a/src/platform_impl/macos/app_state.rs	2026-10-02 21:19:33.061825920 -0700
++++ b/src/platform_impl/macos/app_state.rs	2026-10-02 21:19:33.082093948 -0700
+@@ -8,7 +8,9 @@
+ use objc2_app_kit::{
+     NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSRunningApplication,
+ };
+-use objc2_foundation::{MainThreadMarker, NSNotification, NSObject, NSObjectProtocol};
++use objc2_foundation::{
++    MainThreadMarker, NSArray, NSNotification, NSObject, NSObjectProtocol, NSURL,
++};
+ 
+ use super::event_handler::EventHandler;
+ use super::event_loop::{notify_windows_of_exit, stop_app_immediately, ActiveEventLoop, PanicInfo};
+@@ -70,6 +72,19 @@
+         fn app_will_terminate(&self, notification: &NSNotification) {
+             self.will_terminate(notification)
+         }
++
++        // prev: files Finder, the Dock or `open` hand the app, at launch
++        // and while it runs.
++        #[method(application:openURLs:)]
++        fn app_open_urls(&self, _application: &NSApplication, urls: &NSArray<NSURL>) {
++            let paths = urls
++                .iter()
++                .filter(|url| unsafe { url.isFileURL() })
++                .filter_map(|url| unsafe { url.path() })
++                .map(|path| std::path::PathBuf::from(path.to_string()))
++                .collect();
++            crate::platform::open_files::deliver(paths);
++        }
+     }
+ );
+ 
+@@ -136,7 +151,9 @@
+         #[allow(deprecated)]
+         app.activateIgnoringOtherApps(self.ivars().activate_ignoring_other_apps);
+ 
+-        if self.ivars().default_menu {
++        // prev: only when the application has no menu yet; iced starts
++        // the application, which may put up its own, before this runs.
++        if self.ivars().default_menu && unsafe { app.mainMenu() }.is_none() {
+             // The menubar initialization should be before the `NewEvents` event, to allow
+             // overriding of the default menu even if it's created
+             menu::initialize(&app);
+diff -ruN '--exclude=hand_cursors' a/src/platform_impl/macos/view.rs b/src/platform_impl/macos/view.rs
+--- a/src/platform_impl/macos/view.rs	2026-10-02 21:19:33.063096110 -0700
++++ b/src/platform_impl/macos/view.rs	2026-10-02 21:19:33.082372387 -0700
+@@ -524,6 +524,29 @@
+             self.update_modifiers(event, true);
+         }
+ 
++        // prev: the menu bar's Cut, Copy, Paste and Select All take their
++        // keys before the view sees them; these hand the keys on, so the
++        // application handles them as it does without a menu.
++        #[method(cut:)]
++        fn cut(&self, _sender: Option<&AnyObject>) {
++            self.edit_key("x", 7);
++        }
++
++        #[method(copy:)]
++        fn copy(&self, _sender: Option<&AnyObject>) {
++            self.edit_key("c", 8);
++        }
++
++        #[method(paste:)]
++        fn paste(&self, _sender: Option<&AnyObject>) {
++            self.edit_key("v", 9);
++        }
++
++        #[method(selectAll:)]
++        fn select_all(&self, _sender: Option<&AnyObject>) {
++            self.edit_key("a", 0);
++        }
++
+         #[method(insertTab:)]
+         fn insert_tab(&self, _sender: Option<&AnyObject>) {
+             trace_scope!("insertTab:");
+@@ -784,6 +807,50 @@
+ );
+ 
+ impl WinitView {
++    /// prev: sends the application Command and `character` (virtual key
++    /// `key_code`), for an edit command from the menu bar. When the menu
++    /// item's key equivalent chose it, that key press is the current
++    /// event and goes on as it is; chosen with the mouse, a press and
++    /// release are made, then the real modifier state is sent again.
++    fn edit_key(&self, character: &str, key_code: u16) {
++        use objc2_app_kit::{NSEventModifierFlags, NSEventType};
++        let mtm = MainThreadMarker::from(self);
++        let app = NSApplication::sharedApplication(mtm);
++        if let Some(event) = app.currentEvent() {
++            if unsafe { event.r#type() } == NSEventType::KeyDown {
++                let _: () = unsafe { objc2::msg_send![self, keyDown: &*event] };
++                return;
++            }
++        }
++        let characters = NSString::from_str(character);
++        let window_number = unsafe { self.window().windowNumber() };
++        let make = |kind: NSEventType, flags: NSEventModifierFlags| unsafe {
++            NSEvent::keyEventWithType_location_modifierFlags_timestamp_windowNumber_context_characters_charactersIgnoringModifiers_isARepeat_keyCode(
++                kind,
++                NSPoint::new(0.0, 0.0),
++                flags,
++                0.0,
++                window_number,
++                None,
++                &characters,
++                &characters,
++                false,
++                key_code,
++            )
++        };
++        let command = NSEventModifierFlags::NSEventModifierFlagCommand;
++        if let Some(down) = make(NSEventType::KeyDown, command) {
++            let _: () = unsafe { objc2::msg_send![self, keyDown: &*down] };
++        }
++        if let Some(up) = make(NSEventType::KeyUp, command) {
++            let _: () = unsafe { objc2::msg_send![self, keyUp: &*up] };
++        }
++        let now = unsafe { NSEvent::modifierFlags_class() };
++        if let Some(flags) = make(NSEventType::FlagsChanged, now) {
++            self.update_modifiers(&flags, true);
++        }
++    }
++
+     pub(super) fn new(
+         app_delegate: &ApplicationDelegate,
+         window: &WinitWindow,
+@@ -859,6 +926,10 @@
+         self.ivars().cursor_state.borrow().cursor.clone()
+     }
+ 
++    pub(super) fn cursor_visible(&self) -> bool {
++        self.ivars().cursor_state.borrow().visible
++    }
++
+     pub(super) fn set_cursor_icon(&self, icon: Retained<NSCursor>) {
+         let mut cursor_state = self.ivars().cursor_state.borrow_mut();
+         cursor_state.cursor = icon;
+diff -ruN '--exclude=hand_cursors' a/src/platform_impl/macos/window_delegate.rs b/src/platform_impl/macos/window_delegate.rs
+--- a/src/platform_impl/macos/window_delegate.rs	2026-10-02 21:19:33.063381383 -0700
++++ b/src/platform_impl/macos/window_delegate.rs	2026-10-02 21:19:33.082459279 -0700
+@@ -367,15 +367,19 @@
+     unsafe impl NSDraggingDestination for WindowDelegate {
+         /// Invoked when the dragged image enters destination bounds or frame
+         #[method(draggingEntered:)]
+-        fn dragging_entered(&self, sender: &NSObject) -> bool {
++        fn dragging_entered(&self, sender: &NSObject) -> usize {
+             trace_scope!("draggingEntered:");
+ 
++            if let Some(operation) = self.drag_hook(crate::platform::drag_drop::Phase::Entered, Some(sender)) {
++                return operation;
++            }
++
+             use std::path::PathBuf;
+ 
+             let pb: Retained<NSPasteboard> = unsafe { msg_send_id![sender, draggingPasteboard] };
+             let filenames = match pb.propertyListForType(unsafe { NSFilenamesPboardType }) {
+                 Some(filenames) => filenames,
+-                None => return false.into(),
++                None => return 0,
+             };
+             let filenames: Retained<NSArray<NSString>> = unsafe { Retained::cast(filenames) };
+ 
+@@ -384,7 +388,16 @@
+                 self.queue_event(WindowEvent::HoveredFile(path));
+             });
+ 
+-            true
++            // NSDragOperationCopy
++            1
++        }
++
++        /// Invoked while the drag moves over the window
++        #[method(draggingUpdated:)]
++        fn dragging_updated(&self, sender: &NSObject) -> usize {
++            trace_scope!("draggingUpdated:");
++            self.drag_hook(crate::platform::drag_drop::Phase::Updated, Some(sender))
++                .unwrap_or(1)
+         }
+ 
+         /// Invoked when the image is released
+@@ -399,6 +412,10 @@
+         fn perform_drag_operation(&self, sender: &NSObject) -> bool {
+             trace_scope!("performDragOperation:");
+ 
++            if let Some(taken) = self.drag_hook(crate::platform::drag_drop::Phase::Perform, Some(sender)) {
++                return (taken != 0).into();
++            }
++
+             use std::path::PathBuf;
+ 
+             let pb: Retained<NSPasteboard> = unsafe { msg_send_id![sender, draggingPasteboard] };
+@@ -424,8 +441,11 @@
+ 
+         /// Invoked when the dragging operation is cancelled
+         #[method(draggingExited:)]
+-        fn dragging_exited(&self, _sender: Option<&NSObject>) {
++        fn dragging_exited(&self, sender: Option<&NSObject>) {
+             trace_scope!("draggingExited:");
++            if self.drag_hook(crate::platform::drag_drop::Phase::Exited, sender).is_some() {
++                return;
++            }
+             self.queue_event(WindowEvent::HoveredFileCancelled);
+         }
+     }
+@@ -436,7 +456,7 @@
+         fn observe_value(
+             &self,
+             key_path: Option<&NSString>,
+-            _object: Option<&AnyObject>,
++            object: Option<&AnyObject>,
+             change: Option<&NSDictionary<NSKeyValueChangeKey, AnyObject>>,
+             _context: *mut c_void,
+         ) {
+@@ -458,10 +478,19 @@
+ 
+                 trace!(old = %unsafe { old.name() }, new = %unsafe { new.name() }, "effectiveAppearance changed");
+ 
++                // The application's appearance follows the system's even when
++                // the window's is set, as iced sets it to the app's theme: a
++                // change there is the system's, which the app should hear of.
++                let mtm = MainThreadMarker::from(self);
++                let app = NSApplication::sharedApplication(mtm);
++                let from_app = object.is_some_and(|object| {
++                    ptr::eq(object as *const AnyObject, Retained::as_ptr(&app).cast())
++                });
++
+                 // Ignore the change if the window's theme is customized by the user (since in that
+                 // case the `effectiveAppearance` is only emitted upon said customization, and then
+                 // it's triggered directly by a user action, and we don't want to emit the event).
+-                if unsafe { self.window().appearance() }.is_some() {
++                if !from_app && unsafe { self.window().appearance() }.is_some() {
+                     return;
+                 }
+ 
+@@ -486,6 +515,8 @@
+     fn drop(&mut self) {
+         unsafe {
+             self.window().removeObserver_forKeyPath(self, ns_string!("effectiveAppearance"));
++            let app = NSApplication::sharedApplication(MainThreadMarker::from(&*self));
++            app.removeObserver_forKeyPath(self, ns_string!("effectiveAppearance"));
+         }
+     }
+ }
+@@ -673,6 +704,18 @@
+ }
+ 
+ impl WindowDelegate {
++    /// prev: hands a dragging destination call to the application's hook,
++    /// if one is set.
++    fn drag_hook(
++        &self,
++        phase: crate::platform::drag_drop::Phase,
++        sender: Option<&NSObject>,
++    ) -> Option<usize> {
++        let window = (self.window() as *const WinitWindow).cast();
++        let info = sender.map_or(std::ptr::null(), |sender| (sender as *const NSObject).cast());
++        crate::platform::drag_drop::call(phase, window, info)
++    }
++
+     pub(super) fn new(
+         app_delegate: &ApplicationDelegate,
+         attrs: WindowAttributes,
+@@ -756,6 +799,15 @@
+                 NSKeyValueObservingOptions::NSKeyValueObservingOptionNew
+                     | NSKeyValueObservingOptions::NSKeyValueObservingOptionOld,
+                 ptr::null_mut(),
++            );
++            // And the application's, which follows the system's when the
++            // window's appearance is set; see `observe_value`.
++            NSApplication::sharedApplication(mtm).addObserver_forKeyPath_options_context(
++                &delegate,
++                ns_string!("effectiveAppearance"),
++                NSKeyValueObservingOptions::NSKeyValueObservingOptionNew
++                    | NSKeyValueObservingOptions::NSKeyValueObservingOptionOld,
++                ptr::null_mut(),
+             )
+         };
+ 
+@@ -1115,8 +1167,19 @@
+             return;
+         }
+ 
+-        view.set_cursor_icon(cursor);
++        view.set_cursor_icon(cursor.clone());
+         self.window().invalidateCursorRectsForView(&view);
++        // AppKit applies cursor rects only when the mouse moves, and not at
++        // all while a button is held, so a cursor changed by a key or a
++        // press would wait; set it now when the pointer is over the view.
++        if view.cursor_visible() {
++            let mouse = unsafe { self.window().mouseLocationOutsideOfEventStream() };
++            let point = view.convertPoint_fromView(mouse, None);
++            let size = view.bounds().size;
++            if (0.0..=size.width).contains(&point.x) && (0.0..=size.height).contains(&point.y) {
++                unsafe { cursor.set() };
++            }
++        }
+     }
+ 
+     #[inline]
+diff -ruN '--exclude=hand_cursors' a/src/window.rs b/src/window.rs
+--- a/src/window.rs	2026-10-03 14:09:50.056011074 -0700
++++ b/src/window.rs	2026-10-03 14:09:50.056713415 -0700
+@@ -1423,7 +1423,13 @@
+     ///   cursor is shown.
+     #[inline]
+     pub fn set_cursor(&self, cursor: impl Into<Cursor>) {
+-        let cursor = cursor.into();
++        // prev shows the standard arrow where a widget asks for a hand.
++        let cursor = match cursor.into() {
++            Cursor::Icon(CursorIcon::Pointer | CursorIcon::Grab | CursorIcon::Grabbing) => {
++                Cursor::Icon(CursorIcon::Default)
++            },
++            cursor => cursor,
++        };
+         let _span = tracing::debug_span!("winit::Window::set_cursor",).entered();
+         self.window.maybe_queue_on_main(move |w| w.set_cursor(cursor))
+     }

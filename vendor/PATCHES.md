@@ -50,3 +50,27 @@ stays within its width however it is aligned.
 **Updating:** when iced updates, re-apply the patches to the new versions,
 or drop the vendored copies if iced handles right to left text input.
 
+
+## winit 0.30.13
+
+The same copy prev carries in its own `vendor/winit`, from crates.io with
+prev's changes. License: Apache-2.0 (see `winit/LICENSE`).
+
+**Why:** X11 and Wayland tell every client which of the keymap's layouts
+is active, but winit keeps it to itself. `src/input.rs` reads it to set
+the side an empty text field starts on.
+
+**Changes used here:**
+
+- `src/platform_impl/linux/common/xkb/state.rs`: the XKB state keeps the
+  keymap it was made from, and whenever the active layout changes (and
+  when the state is made) it looks up what that layout types on the
+  three letter rows.
+- `src/platform/keyboard_layout.rs` (new): `letters()` returns those
+  letters; `src/input.rs` tells the layout's direction from their script,
+  so it needs no list of layout names.
+
+The copy also has prev's macOS changes, described in prev's
+`vendor/PATCHES.md`. Files to open and drags act only when an app sets
+their hooks; the menu bar, cursor and appearance fixes apply to every
+iced app on macOS. The full diff is `winit.patch`.

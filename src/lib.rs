@@ -12,6 +12,7 @@ pub mod enter;
 pub mod field;
 pub mod font;
 pub mod icon;
+pub mod input;
 pub mod labels;
 pub mod motion;
 pub mod omarchy;
