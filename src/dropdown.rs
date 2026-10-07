@@ -1323,6 +1323,51 @@ mod tests {
     }
 
     #[test]
+    fn a_tooltip_on_the_button_gives_way_to_the_open_menu() {
+        let dropdown = pick(["Light", "Dark"], Some("Light"), |shade| shade);
+        let content = iced::widget::row![
+            iced::widget::tooltip(
+                dropdown,
+                iced::widget::text("Pick a shade"),
+                iced::widget::tooltip::Position::Bottom,
+            ),
+            iced::widget::text("Aside"),
+        ]
+        .spacing(40)
+        .padding(20);
+        let mut simulator = iced_test::Simulator::with_size(
+            iced::Settings {
+                fonts: font::files().collect(),
+                default_font: font::TEXT,
+                ..iced::Settings::default()
+            },
+            Size::new(400.0, 300.0),
+            content,
+        );
+        let button = simulator.find("Light").expect("the button").bounds();
+        let hover = |simulator: &mut iced_test::Simulator<'_, &str>| {
+            simulator.point_at(button.center());
+            let _ = simulator.simulate([Event::Mouse(mouse::Event::CursorMoved {
+                position: button.center(),
+            })]);
+        };
+        hover(&mut simulator);
+        assert!(simulator.find("Pick a shade").is_ok(), "shown on hover");
+        simulator.click("Light").expect("the button");
+        assert!(simulator.find("Dark").is_ok(), "open");
+        assert!(
+            simulator.find("Pick a shade").is_err(),
+            "hidden while the menu is open"
+        );
+        let _ = simulator.tap_key(keyboard::key::Named::Escape);
+        hover(&mut simulator);
+        assert!(
+            simulator.find("Pick a shade").is_ok(),
+            "back once it closes"
+        );
+    }
+
+    #[test]
     fn escape_a_click_outside_or_the_button_closes_the_menu() {
         let mut simulator = window(Look::Outlined);
         let open = |simulator: &mut iced_test::Simulator<'_, &str>| {

@@ -13,7 +13,8 @@ the way they point, and a click or drag started left of the text began
 at its start instead of its end. Pick lists kept their text on the left
 in right to left interfaces. Right to left text drawn right aligned or
 centred in unbounded width, as a canvas draws it, put its glyphs at
-infinity, which overflowed the glyph cache.
+infinity, which overflowed the glyph cache. And a tooltip on a drop-down
+covered the drop-down's open menu.
 
 **Changes:**
 
@@ -41,9 +42,14 @@ infinity, which overflowed the glyph cache.
   on the right and the handle on the left. The text is measured and
   drawn from its left edge, since right aligned text laid out wider than
   itself is misplaced.
+- `iced_widget/src/tooltip.rs`: a tooltip is not shown while its content
+  shows an overlay of its own, so a tooltip on a drop-down no longer
+  covers the drop-down's open menu; and operations reach a shown
+  tooltip's content, so tests can find its text.
 
-The full diffs are `iced_graphics-rtl.patch` and `iced_widget-rtl.patch`
-(`diff -ruN` of `src/` against the crates.io releases). Tests in
+The full diffs are `iced_graphics-rtl.patch`, `iced_widget-rtl.patch`
+and `iced_widget-tooltip.patch` (`diff -ruN` of `src/` against the
+crates.io releases). Tests in
 `src/font.rs` check the cursor positions and that right to left text
 stays within its width however it is aligned.
 

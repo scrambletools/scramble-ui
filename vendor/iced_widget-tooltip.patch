@@ -1,0 +1,38 @@
+diff -ruN a/src/tooltip.rs b/src/tooltip.rs
+--- a/src/tooltip.rs	2026-10-07 11:08:39.274116213 -0700
++++ b/src/tooltip.rs	2026-10-07 11:11:22.877138728 -0700
+@@ -340,7 +340,11 @@
+             translation,
+         );
+ 
+-        let tooltip = if let State::Open { cursor_position } = *state {
++        // The tooltip stays out of the way of the content's own overlay,
++        // such as a pick list's open menu.
++        let tooltip = if content.is_none()
++            && let State::Open { cursor_position } = *state
++        {
+             Some(overlay::Element::new(Box::new(Overlay {
+                 position: layout.position() + translation,
+                 tooltip: &mut self.tooltip,
+@@ -555,6 +559,21 @@
+         .translate(Vector::new(tooltip_bounds.x, tooltip_bounds.y))
+     }
+ 
++    // Operations reach the tooltip's content too, so it can be found.
++    fn operate(
++        &mut self,
++        layout: Layout<'_>,
++        renderer: &Renderer,
++        operation: &mut dyn widget::Operation,
++    ) {
++        self.tooltip.as_widget_mut().operate(
++            self.tree,
++            layout.children().next().unwrap(),
++            renderer,
++            operation,
++        );
++    }
++
+     fn draw(
+         &self,
+         renderer: &mut Renderer,

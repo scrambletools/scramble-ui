@@ -340,7 +340,11 @@ where
             translation,
         );
 
-        let tooltip = if let State::Open { cursor_position } = *state {
+        // The tooltip stays out of the way of the content's own overlay,
+        // such as a pick list's open menu.
+        let tooltip = if content.is_none()
+            && let State::Open { cursor_position } = *state
+        {
             Some(overlay::Element::new(Box::new(Overlay {
                 position: layout.position() + translation,
                 tooltip: &mut self.tooltip,
@@ -553,6 +557,21 @@ where
             ],
         )
         .translate(Vector::new(tooltip_bounds.x, tooltip_bounds.y))
+    }
+
+    // Operations reach the tooltip's content too, so it can be found.
+    fn operate(
+        &mut self,
+        layout: Layout<'_>,
+        renderer: &Renderer,
+        operation: &mut dyn widget::Operation,
+    ) {
+        self.tooltip.as_widget_mut().operate(
+            self.tree,
+            layout.children().next().unwrap(),
+            renderer,
+            operation,
+        );
     }
 
     fn draw(
