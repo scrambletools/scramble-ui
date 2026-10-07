@@ -705,13 +705,16 @@ pub fn search_bar<'a, Message: Clone + 'a>(
         .size(Type::BodyLarge.size())
         .font(Type::BodyLarge.font(false))
         .placeholder_align(super::dir::horizontal_start());
+    // With nothing after the field, its end has the room its start does,
+    // as text typed in the other direction starts at that end.
+    let end = if trailing.is_empty() { 12.0 } else { 4.0 };
     let mut content = crate::line![
         icon::icon(Icon::Search, 20).style(style::on_surface_variant),
         input
     ]
     .spacing(4)
     .align_y(Center)
-    .padding(super::dir::padding(0.0, 4.0, 0.0, 12.0));
+    .padding(super::dir::padding(0.0, end, 0.0, 12.0));
     for element in trailing {
         content = content.push(element);
     }
