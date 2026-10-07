@@ -988,22 +988,31 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, iced::Renderer>
                 clip,
             );
         }
-        renderer.fill_text(
-            text::Text {
-                align_x,
-                shaping: text::Shaping::Basic,
-                ..line(
-                    Icon::ArrowDropDown.codepoint().to_string(),
-                    font::ICONS,
-                    ARROW,
-                    ARROW,
-                    ARROW,
-                )
-            },
-            Point::new(arrow_x, bounds.center_y()),
-            content,
-            clip,
-        );
+        // The arrow only when all of it is in view: a software renderer
+        // draws a glyph the clip cuts whole.
+        let arrow_left = if self.mirrored {
+            arrow_x - ARROW
+        } else {
+            arrow_x
+        };
+        if arrow_left >= clip.x && arrow_left + ARROW <= clip.x + clip.width {
+            renderer.fill_text(
+                text::Text {
+                    align_x,
+                    shaping: text::Shaping::Basic,
+                    ..line(
+                        Icon::ArrowDropDown.codepoint().to_string(),
+                        font::ICONS,
+                        ARROW,
+                        ARROW,
+                        ARROW,
+                    )
+                },
+                Point::new(arrow_x, bounds.center_y()),
+                content,
+                clip,
+            );
+        }
     }
 
     fn mouse_interaction(

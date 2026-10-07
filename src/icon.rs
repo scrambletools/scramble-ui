@@ -44,6 +44,7 @@ icons! {
     ChatBubble = 0xe0cb, "chat_bubble";
     Check = 0xe668, "check";
     CheckCircle = 0xe86c, "check_circle";
+    ChevronLeft = 0xe5cb, "chevron_left";
     ChevronRight = 0xe5cc, "chevron_right";
     Circle = 0xef4a, "circle";
     Close = 0xe5cd, "close";
