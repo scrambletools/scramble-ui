@@ -1,6 +1,6 @@
 diff -ruN a/src/text/paragraph.rs b/src/text/paragraph.rs
---- a/src/text/paragraph.rs	2026-09-29 13:47:06.145272846 -0700
-+++ b/src/text/paragraph.rs	2026-09-29 13:47:06.146800467 -0700
+--- a/src/text/paragraph.rs	2026-10-06 19:36:03.032248278 -0700
++++ b/src/text/paragraph.rs	2026-10-06 19:36:03.034318512 -0700
 @@ -351,43 +351,48 @@
      fn grapheme_position(&self, line: usize, index: usize) -> Option<Point> {
          use unicode_segmentation::UnicodeSegmentation;
@@ -80,4 +80,18 @@ diff -ruN a/src/text/paragraph.rs b/src/text/paragraph.rs
 +        Some(place(glyph, x))
      }
  }
+ 
+diff -ruN a/src/text.rs b/src/text.rs
+--- a/src/text.rs	2026-10-06 19:36:03.032394070 -0700
++++ b/src/text.rs	2026-10-06 19:36:03.034375939 -0700
+@@ -237,7 +237,9 @@
+ 
+             needs_relayout = true;
+         } else if let Some(line) = buffer.lines.first_mut() {
+-            needs_relayout = line.set_align(None);
++            // prev: keep the relayout right to left text needs, or a line
++            // laid out in unbounded width keeps its glyphs at infinity.
++            needs_relayout |= line.set_align(None);
+         }
+     }
  

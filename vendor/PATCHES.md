@@ -11,9 +11,16 @@ right to left text the cursor was drawn at the wrong character, a
 selection was not drawn at all, the arrow keys moved the cursor against
 the way they point, and a click or drag started left of the text began
 at its start instead of its end. Pick lists kept their text on the left
-in right to left interfaces.
+in right to left interfaces. Right to left text drawn right aligned or
+centred in unbounded width, as a canvas draws it, put its glyphs at
+infinity, which overflowed the glyph cache.
 
 **Changes:**
+
+- `iced_graphics/src/text.rs`: `align` keeps the relayout right to left
+  text needs when it clears a single line's alignment, so the line is
+  laid out in its own width rather than the unbounded one, where
+  cosmic-text starts right to left lines at the right edge.
 
 - `iced_graphics/src/text/paragraph.rs`: `grapheme_position` finds the
   grapheme's glyph by its byte offset (glyphs are in visual order) and
@@ -36,8 +43,9 @@ in right to left interfaces.
   itself is misplaced.
 
 The full diffs are `iced_graphics-rtl.patch` and `iced_widget-rtl.patch`
-(`diff -ruN` of `src/` against the crates.io releases). A test in
-`src/font.rs` checks the cursor positions.
+(`diff -ruN` of `src/` against the crates.io releases). Tests in
+`src/font.rs` check the cursor positions and that right to left text
+stays within its width however it is aligned.
 
 **Updating:** when iced updates, re-apply the patches to the new versions,
 or drop the vendored copies if iced handles right to left text input.

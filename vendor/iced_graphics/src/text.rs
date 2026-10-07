@@ -237,7 +237,9 @@ pub fn align(
 
             needs_relayout = true;
         } else if let Some(line) = buffer.lines.first_mut() {
-            needs_relayout = line.set_align(None);
+            // prev: keep the relayout right to left text needs, or a line
+            // laid out in unbounded width keeps its glyphs at infinity.
+            needs_relayout |= line.set_align(None);
         }
     }
 

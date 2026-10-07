@@ -158,13 +158,17 @@ mod cursor_tests {
     use iced::advanced::text::{self, Paragraph as _};
 
     fn paragraph(content: &str) -> Paragraph {
+        aligned_paragraph(content, text::Alignment::Default)
+    }
+
+    fn aligned_paragraph(content: &str, align_x: text::Alignment) -> Paragraph {
         Paragraph::with_text(text::Text {
             content,
             bounds: iced::Size::INFINITE,
             size: iced::Pixels(16.0),
             line_height: text::LineHeight::default(),
             font: iced::Font::DEFAULT,
-            align_x: text::Alignment::Default,
+            align_x,
             align_y: iced::alignment::Vertical::Top,
             shaping: text::Shaping::Advanced,
             wrapping: text::Wrapping::None,
@@ -201,6 +205,29 @@ mod cursor_tests {
                 positions[count].abs() < 0.5,
                 "{sample}: the end is at the left edge: {positions:?}"
             );
+        }
+    }
+
+    /// Right to left text in unbounded width, as a canvas draws it, keeps
+    /// its glyphs within its own width however it is aligned
+    /// (vendor/PATCHES.md).
+    #[test]
+    fn right_to_left_text_stays_within_its_width() {
+        for align_x in [
+            text::Alignment::Default,
+            text::Alignment::Left,
+            text::Alignment::Center,
+            text::Alignment::Right,
+        ] {
+            let paragraph = aligned_paragraph("שלום", align_x);
+            let width = paragraph.min_width();
+            for index in 0..=4 {
+                let x = cursor_x(&paragraph, index);
+                assert!(
+                    x.is_finite() && (-0.5..=width + 0.5).contains(&x),
+                    "{align_x:?}: {x} outside 0 to {width}"
+                );
+            }
         }
     }
 }
