@@ -903,4 +903,93 @@ mod tests {
         assert_eq!(fitting_slots(400.0, &slots), [true, true, false, true]);
         assert_eq!(fitting_slots(300.0, &slots), [true, false, false, true]);
     }
+
+    /// Content that zooms with Ctrl and the wheel, as a document view
+    /// does: it takes the wheel only with Ctrl held, and leaves it to the
+    /// scrollable otherwise.
+    #[derive(Default)]
+    struct Zoomable {
+        ctrl: std::cell::Cell<bool>,
+    }
+
+    impl iced::advanced::Widget<&'static str, Theme, iced::Renderer> for Zoomable {
+        fn size(&self) -> iced::Size<Length> {
+            iced::Size::new(Length::Fixed(300.0), Length::Fixed(3000.0))
+        }
+
+        fn layout(
+            &mut self,
+            _tree: &mut iced::advanced::widget::Tree,
+            _renderer: &iced::Renderer,
+            limits: &iced::advanced::layout::Limits,
+        ) -> iced::advanced::layout::Node {
+            iced::advanced::layout::Node::new(limits.resolve(
+                Length::Fixed(300.0),
+                Length::Fixed(3000.0),
+                iced::Size::new(300.0, 3000.0),
+            ))
+        }
+
+        fn draw(
+            &self,
+            _tree: &iced::advanced::widget::Tree,
+            _renderer: &mut iced::Renderer,
+            _theme: &Theme,
+            _style: &iced::advanced::renderer::Style,
+            _layout: iced::advanced::Layout<'_>,
+            _cursor: iced::mouse::Cursor,
+            _viewport: &iced::Rectangle,
+        ) {
+        }
+
+        fn update(
+            &mut self,
+            _tree: &mut iced::advanced::widget::Tree,
+            event: &iced::Event,
+            _layout: iced::advanced::Layout<'_>,
+            _cursor: iced::mouse::Cursor,
+            _renderer: &iced::Renderer,
+            _clipboard: &mut dyn iced::advanced::Clipboard,
+            shell: &mut iced::advanced::Shell<'_, &'static str>,
+            _viewport: &iced::Rectangle,
+        ) {
+            match event {
+                iced::Event::Keyboard(iced::keyboard::Event::ModifiersChanged(modifiers)) => {
+                    self.ctrl.set(modifiers.command());
+                }
+                iced::Event::Mouse(iced::mouse::Event::WheelScrolled { .. }) if self.ctrl.get() => {
+                    shell.publish("zoom");
+                    shell.capture_event();
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// A scrollable just scrolled keeps the wheel from its content for a
+    /// moment; a modifier pressed in between hands it back, so Ctrl and
+    /// the wheel reach a view that zooms with them.
+    #[test]
+    fn a_modifier_hands_the_wheel_back_to_the_content() {
+        use iced::mouse::{self, ScrollDelta};
+        use iced::{Event, Size, keyboard};
+        let scroll = iced::widget::scrollable(Element::new(Zoomable::default())).height(200);
+        let mut simulator = iced_test::Simulator::with_size(
+            iced::Settings::default(),
+            Size::new(300.0, 200.0),
+            scroll,
+        );
+        simulator.point_at(iced::Point::new(150.0, 100.0));
+        let wheel = Event::Mouse(mouse::Event::WheelScrolled {
+            delta: ScrollDelta::Lines { x: 0.0, y: -1.0 },
+        });
+        // A plain notch scrolls, starting the scrollable's transaction.
+        let _ = simulator.simulate([wheel.clone()]);
+        // Ctrl pressed, then the wheel: the content zooms.
+        let _ = simulator.simulate([
+            Event::Keyboard(keyboard::Event::ModifiersChanged(keyboard::Modifiers::CTRL)),
+            wheel,
+        ]);
+        assert_eq!(simulator.into_messages().collect::<Vec<_>>(), ["zoom"]);
+    }
 }

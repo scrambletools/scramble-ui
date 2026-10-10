@@ -608,6 +608,9 @@ where
                 Event::Mouse(mouse::Event::CursorMoved { .. }) => {
                     last_scrolled.elapsed() > Duration::from_millis(100)
                 }
+                // A new modifier starts a new gesture, such as Ctrl and the
+                // wheel to zoom, which the content handles.
+                Event::Keyboard(keyboard::Event::ModifiersChanged(_)) => true,
                 _ => last_scrolled.elapsed() > Duration::from_millis(1500),
             };
 

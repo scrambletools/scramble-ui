@@ -1,0 +1,12 @@
+--- a/src/scrollable.rs	2026-10-10 14:40:21.359027084 -0700
++++ b/src/scrollable.rs	2026-10-10 14:40:21.359867433 -0700
+@@ -608,6 +608,9 @@
+                 Event::Mouse(mouse::Event::CursorMoved { .. }) => {
+                     last_scrolled.elapsed() > Duration::from_millis(100)
+                 }
++                // A new modifier starts a new gesture, such as Ctrl and the
++                // wheel to zoom, which the content handles.
++                Event::Keyboard(keyboard::Event::ModifiersChanged(_)) => true,
+                 _ => last_scrolled.elapsed() > Duration::from_millis(1500),
+             };
+ 

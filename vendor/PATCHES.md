@@ -14,7 +14,9 @@ at its start instead of its end. Pick lists kept their text on the left
 in right to left interfaces. Right to left text drawn right aligned or
 centred in unbounded width, as a canvas draws it, put its glyphs at
 infinity, which overflowed the glyph cache. And a tooltip on a drop-down
-covered the drop-down's open menu.
+covered the drop-down's open menu. A scrollable just scrolled kept the
+wheel to itself for up to a second and a half, so Ctrl and the wheel
+over a zoomable view scrolled instead of zooming.
 
 **Changes:**
 
@@ -47,8 +49,13 @@ covered the drop-down's open menu.
   covers the drop-down's open menu; and operations reach a shown
   tooltip's content, so tests can find its text.
 
-The full diffs are `iced_graphics-rtl.patch`, `iced_widget-rtl.patch`
-and `iced_widget-tooltip.patch` (`diff -ruN` of `src/` against the
+- `iced_widget/src/scrollable.rs`: a change of modifier keys ends the
+  scroll transaction, in which a scrollable just scrolled keeps wheel
+  events from its content, so Ctrl and the wheel reach a view that zooms
+  with them.
+
+The full diffs are `iced_graphics-rtl.patch`, `iced_widget-rtl.patch`,
+`iced_widget-tooltip.patch` and `iced_widget-scrollable.patch` (`diff -ruN` of `src/` against the
 crates.io releases). Tests in
 `src/font.rs` check the cursor positions and that right to left text
 stays within its width however it is aligned.
